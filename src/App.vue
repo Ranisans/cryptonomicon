@@ -40,34 +40,26 @@
                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                 placeholder="Например DOGE"
                 v-model="tickerName"
-                @keydown.enter="addTicker"
+                @keyup.enter="addTicker"
+                @keydown="filter"
               />
             </div>
             <div
               class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
+              v-if="coinsExample.length > 0"
             >
               <span
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
+                v-for="coin in coinsExample"
+                :key="coin"
+                @click="selectCoin(coin)"
               >
-                BTC
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
+                {{ coin }}
               </span>
             </div>
-            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+            <div v-if="tickerError" class="text-sm text-red-600">
+              Такой тикер уже добавлен
+            </div>
           </div>
         </div>
         <button
@@ -111,7 +103,7 @@
             <div class="w-full border-t border-gray-200"></div>
             <button
               class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
-              @click="removeTicker(ticker)"
+              @click.stop="removeTicker(ticker)"
             >
               <svg
                 class="h-5 w-5"
@@ -176,10 +168,12 @@ export default {
   data: function() {
     return {
       tickerName: "",
+      tickerError: false,
       tickers: [],
       activeTicker: null,
       activeTickerData: [],
-      coins: null
+      coins: null,
+      coinsExample: []
     };
   },
   created() {
@@ -195,6 +189,11 @@ export default {
 
     getCoinList.call(this);
   },
+  beforeUnmount() {
+    for (let ticker in this.tickers) {
+      clearInterval(ticker.intervalId);
+    }
+  },
   methods: {
     clearActive() {
       this.activeTicker = null;
@@ -204,10 +203,29 @@ export default {
       this.activeTicker = ticker;
       this.activeTickerData = [];
     },
+    filter() {
+      if (this.tickerName) {
+        this.tickerError = false;
+        const filteredCoins = this.coins.filter(coin =>
+          coin.toLowerCase().includes(this.tickerName.toLowerCase())
+        );
+        this.coinsExample = filteredCoins.slice(0, 4);
+      }
+    },
+    selectCoin(coinName) {
+      this.tickerName = coinName;
+      this.addTicker();
+    },
     addTicker() {
       if (this.tickerName) {
+        const newTickerName = this.tickerName.toUpperCase();
+        if (this.tickers.findIndex(t => t.name === newTickerName) >= 0) {
+          this.tickerError = true;
+          return;
+        }
+        this.tickerError = false;
         const currentTickers = {
-          name: this.tickerName,
+          name: newTickerName,
           price: "-"
         };
         const intervalId = setInterval(async () => {
@@ -216,7 +234,7 @@ export default {
           );
           const data = await result.json();
 
-          this.tickers.find(t => t.name === currentTickers).price =
+          this.tickers.find(t => t.name === currentTickers.name).price =
             data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
           if (this.active?.name === currentTickers.name) {
