@@ -2,6 +2,7 @@
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div
       class="fixed w-100 h-100 opacity-80 bg-purple-800 inset-0 z-50 flex items-center justify-center"
+      v-if="!coins"
     >
       <svg
         class="animate-spin -ml-1 mr-3 h-12 w-12 text-white"
@@ -177,8 +178,22 @@ export default {
       tickerName: "",
       tickers: [],
       activeTicker: null,
-      activeTickerData: []
+      activeTickerData: [],
+      coins: null
     };
+  },
+  created() {
+    async function getCoinList() {
+      const result = await fetch(
+        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+      );
+      const data = (await result.json()).Data;
+      const values = Object.values(data);
+
+      this.coins = values.map(coin => coin.Symbol);
+    }
+
+    getCoinList.call(this);
   },
   methods: {
     clearActive() {
