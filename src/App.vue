@@ -39,6 +39,7 @@
                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                 placeholder="Например DOGE"
                 v-model="tickerName"
+                @keydown.enter="addTicker"
               />
             </div>
             <div
@@ -69,6 +70,7 @@
           </div>
         </div>
         <button
+          @click="addTicker"
           type="button"
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
@@ -108,6 +110,7 @@
             <div class="w-full border-t border-gray-200"></div>
             <button
               class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
+              @click="removeTicker(ticker)"
             >
               <svg
                 class="h-5 w-5"
@@ -185,6 +188,37 @@ export default {
     setActiveTicker(ticker) {
       this.activeTicker = ticker;
       this.activeTickerData = [];
+    },
+    addTicker() {
+      if (this.tickerName) {
+        const currentTickers = {
+          name: this.tickerName,
+          price: "-"
+        };
+        const intervalId = setInterval(async () => {
+          const result = await fetch(
+            `https://min-api.cryptocompare.com/data/price?fsym=${currentTickers.name}&tsyms=USD&api_key=${process.env.API_KEY}`
+          );
+          const data = await result.json();
+
+          this.tickers.find(t => t.name === currentTickers).price =
+            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+
+          if (this.active?.name === currentTickers.name) {
+            this.graph.push(data.USD);
+          }
+        }, 3000);
+        currentTickers.intervalId = intervalId;
+        this.tickers.push(currentTickers);
+        this.tickerName = "";
+      }
+    },
+    removeTicker(ticker) {
+      clearInterval(ticker.intervalId);
+      if (this.activeTicker === ticker) {
+        this.clearActive();
+      }
+      this.tickers = this.tickers.filter(t => t !== ticker);
     }
   }
 };
