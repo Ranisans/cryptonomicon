@@ -127,9 +127,14 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ activeTicker.name }} - USD
         </h3>
-        <div
-          class="flex items-end border-gray-600 border-b border-l h-64"
-        ></div>
+        <div class="flex items-end border-gray-600 border-b border-l h-64">
+          <div
+            v-for="(bar, id) in normalizeGraph()"
+            :key="id"
+            :style="{ height: `${bar}%` }"
+            class="bg-purple-800 border w-10"
+          ></div>
+        </div>
         <button
           type="button"
           class="absolute top-0 right-0"
@@ -171,7 +176,7 @@ export default {
       tickerError: false,
       tickers: [],
       activeTicker: null,
-      activeTickerData: [],
+      graph: [],
       coins: null,
       coinsExample: []
     };
@@ -197,11 +202,11 @@ export default {
   methods: {
     clearActive() {
       this.activeTicker = null;
-      this.activeTickerData = [];
+      this.graph = [];
     },
     setActiveTicker(ticker) {
       this.activeTicker = ticker;
-      this.activeTickerData = [];
+      this.graph = [];
     },
     filter() {
       if (this.tickerName) {
@@ -224,6 +229,7 @@ export default {
           return;
         }
         this.tickerError = false;
+        this.coinsExample = [];
         const currentTickers = {
           name: newTickerName,
           price: "-"
@@ -237,7 +243,7 @@ export default {
           this.tickers.find(t => t.name === currentTickers.name).price =
             data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-          if (this.active?.name === currentTickers.name) {
+          if (this.activeTicker?.name === currentTickers.name) {
             this.graph.push(data.USD);
           }
         }, 3000);
@@ -252,6 +258,15 @@ export default {
         this.clearActive();
       }
       this.tickers = this.tickers.filter(t => t !== ticker);
+    },
+    normalizeGraph() {
+      const maxValue = Math.max(...this.graph);
+
+      const minValue = Math.min(...this.graph);
+
+      return this.graph.map(
+        price => 5 + ((price - minValue) * 95) / (maxValue - minValue) || 1
+      );
     }
   }
 };
