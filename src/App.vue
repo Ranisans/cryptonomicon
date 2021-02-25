@@ -39,18 +39,17 @@
                 id="wallet"
                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                 placeholder="Например DOGE"
-                v-model="tickerName"
+                v-model="tickerValue"
                 @keyup.enter="addTicker"
-                @keydown="filter"
               />
             </div>
             <div
               class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
-              v-if="coinsExample.length > 0"
+              v-if="tickerName"
             >
               <span
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-                v-for="coin in coinsExample"
+                v-for="coin in coinsHints"
                 :key="coin"
                 @click="selectCoin(coin)"
               >
@@ -199,6 +198,26 @@ export default {
       clearInterval(ticker.intervalId);
     }
   },
+  computed: {
+    coinsHints() {
+      if (this.tickerName) {
+        const filteredCoins = this.coins.filter(coin =>
+          coin.toLowerCase().includes(this.tickerName.toLowerCase())
+        );
+        return filteredCoins.slice(0, 4);
+      }
+      return [];
+    },
+    tickerValue: {
+      set(newValue) {
+        this.tickerError = false;
+        this.tickerName = newValue;
+      },
+      get() {
+        return this.tickerName;
+      }
+    }
+  },
   methods: {
     clearActive() {
       this.activeTicker = null;
@@ -208,17 +227,8 @@ export default {
       this.activeTicker = ticker;
       this.graph = [];
     },
-    filter() {
-      if (this.tickerName) {
-        this.tickerError = false;
-        const filteredCoins = this.coins.filter(coin =>
-          coin.toLowerCase().includes(this.tickerName.toLowerCase())
-        );
-        this.coinsExample = filteredCoins.slice(0, 4);
-      }
-    },
     selectCoin(coinName) {
-      this.tickerName = coinName;
+      this.tickerValue = coinName;
       this.addTicker();
     },
     addTicker() {
@@ -228,7 +238,6 @@ export default {
           this.tickerError = true;
           return;
         }
-        this.tickerError = false;
         this.coinsExample = [];
         const currentTickers = {
           name: newTickerName,
@@ -239,12 +248,18 @@ export default {
             `https://min-api.cryptocompare.com/data/price?fsym=${currentTickers.name}&tsyms=USD&api_key=${process.env.API_KEY}`
           );
           const data = await result.json();
+          const currentTickerLink = this.tickers.find(
+            t => t.name === currentTickers.name
+          );
+          if (data.USD) {
+            currentTickerLink.price =
+              data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-          this.tickers.find(t => t.name === currentTickers.name).price =
-            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-          if (this.activeTicker?.name === currentTickers.name) {
-            this.graph.push(data.USD);
+            if (this.activeTicker?.name === currentTickers.name) {
+              this.graph.push(data.USD);
+            }
+          } else {
+            currentTickerLink.price = "NO DATA";
           }
         }, 3000);
         currentTickers.intervalId = intervalId;
