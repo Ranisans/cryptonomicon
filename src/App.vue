@@ -195,6 +195,7 @@ const CURRENCY = "USD";
 const REFRESH_PERIOD = 3000;
 const MAX_TICKER_PER_PAGE = 6;
 const LOCAL_STORAGE = "cryptonomicon_key";
+const MAX_PRICES_IN_GRAPH = 50;
 
 export default {
   name: "App",
@@ -369,6 +370,9 @@ export default {
         tickerData[CURRENCY];
       if (this.activeTicker && this.activeTicker.name === tickerName)
         this.graph.push(tickerData[CURRENCY]);
+      if (this.graph.length > MAX_PRICES_IN_GRAPH) {
+        this.graph = this.graph.slice(-MAX_PRICES_IN_GRAPH);
+      }
     },
     removeTicker(ticker) {
       clearInterval(ticker.intervalId);
