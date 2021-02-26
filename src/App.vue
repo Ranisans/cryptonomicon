@@ -84,10 +84,30 @@
       </section>
       <template v-if="tickers.length > 0">
         <hr class="w-full border-t border-gray-600 my-4" />
+        <div>
+          <button
+            class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            @click="page = page - 1"
+            :disabled="page <= 1"
+            :class="page <= 1 && 'cursor-not-allowed opacity-50'"
+          >
+            Назад
+          </button>
+          <button
+            class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            @click="page = page + 1"
+            :disabled="!hasNextPage"
+            :class="!hasNextPage && 'cursor-not-allowed opacity-50'"
+          >
+            Вперед
+          </button>
+          <div>Фильтр: <input v-model="filter" /></div>
+        </div>
+        <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
-            v-for="ticker in tickers"
+            v-for="ticker in showedTickers"
             :key="ticker.name"
             @click="setActiveTicker(ticker)"
           >
@@ -173,6 +193,8 @@ const headers = {
 
 const CURRENCY = "USD";
 const REFRESH_PERIOD = 3000;
+const MAX_TICKER_PER_PAGE = 6;
+const LOCAL_STORAGE = "cryptonomicon_key";
 
 export default {
   name: "App",
@@ -185,7 +207,9 @@ export default {
       activeTicker: null,
       graph: [],
       coins: null,
-      coinsExample: []
+      coinsExample: [],
+      page: 1,
+      filter: ""
     };
   },
   created() {
@@ -218,9 +242,14 @@ export default {
     }, REFRESH_PERIOD);
 
     getCoinList.call(this);
+
+    const tickersData = localStorage.getItem(LOCAL_STORAGE);
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData);
+    }
   },
   beforeUnmount() {
-    clearInterval(this.intervalId);
+    if (this.intervalId) clearInterval(this.intervalId);
   },
   computed: {
     coinsHints() {
@@ -246,6 +275,23 @@ export default {
     },
     tickersString() {
       return this.tickersArray.join(",");
+    },
+    startIndex() {
+      return (this.page - 1) * MAX_TICKER_PER_PAGE;
+    },
+    endIndex() {
+      return this.page * MAX_TICKER_PER_PAGE;
+    },
+    filteredTickers() {
+      return this.tickers.filter(ticker =>
+        ticker.name.includes(this.filter.toUpperCase())
+      );
+    },
+    showedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex);
+    },
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex;
     }
   },
   methods: {
@@ -275,6 +321,7 @@ export default {
         };
 
         this.tickers.push(currentTickers);
+        localStorage.setItem(LOCAL_STORAGE, JSON.stringify(this.tickers));
         this.tickerName = "";
       }
     },
@@ -290,6 +337,7 @@ export default {
         this.clearActive();
       }
       this.tickers = this.tickers.filter(t => t !== ticker);
+      localStorage.setItem(LOCAL_STORAGE, JSON.stringify(this.tickers));
     },
     normalizeGraph() {
       const maxValue = Math.max(...this.graph);
