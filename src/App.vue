@@ -167,10 +167,18 @@
 </template>
 
 <script>
+const headers = {
+  Authorization: "Apikey " + process.env.VUE_APP_API_KEY
+};
+
+const CURRENCY = "USD";
+const REFRESH_PERIOD = 3000;
+
 export default {
   name: "App",
   data: function() {
     return {
+      intervalId: null,
       tickerName: "",
       tickerError: false,
       tickers: [],
@@ -183,20 +191,36 @@ export default {
   created() {
     async function getCoinList() {
       const result = await fetch(
-        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true",
+        { headers: headers }
       );
-      const data = (await result.json()).Data;
-      const values = Object.values(data);
+      const data = await result.json();
+      const coinsData = data.Data;
+      const values = Object.values(coinsData);
 
       this.coins = values.map(coin => coin.Symbol);
     }
 
+    this.intervalId = setInterval(async () => {
+      if (this.tickersString) {
+        const result = await fetch(
+          `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${this.tickersString}&tsyms=${CURRENCY}&api_key=${process.env.VUE_APP_API_KEY}`
+        );
+        const data = await result.json();
+
+        this.tickersArray.forEach(tickerName => {
+          const tickerData = data[tickerName];
+          if (tickerData) {
+            this.updateTicker(tickerName, tickerData);
+          }
+        });
+      }
+    }, REFRESH_PERIOD);
+
     getCoinList.call(this);
   },
   beforeUnmount() {
-    for (let ticker in this.tickers) {
-      clearInterval(ticker.intervalId);
-    }
+    clearInterval(this.intervalId);
   },
   computed: {
     coinsHints() {
@@ -216,6 +240,12 @@ export default {
       get() {
         return this.tickerName;
       }
+    },
+    tickersArray() {
+      return this.tickers.map(ticker => ticker.name);
+    },
+    tickersString() {
+      return this.tickersArray.join(",");
     }
   },
   methods: {
@@ -243,29 +273,16 @@ export default {
           name: newTickerName,
           price: "-"
         };
-        const intervalId = setInterval(async () => {
-          const result = await fetch(
-            `https://min-api.cryptocompare.com/data/price?fsym=${currentTickers.name}&tsyms=USD&api_key=${process.env.API_KEY}`
-          );
-          const data = await result.json();
-          const currentTickerLink = this.tickers.find(
-            t => t.name === currentTickers.name
-          );
-          if (data.USD) {
-            currentTickerLink.price =
-              data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-            if (this.activeTicker?.name === currentTickers.name) {
-              this.graph.push(data.USD);
-            }
-          } else {
-            currentTickerLink.price = "NO DATA";
-          }
-        }, 3000);
-        currentTickers.intervalId = intervalId;
         this.tickers.push(currentTickers);
         this.tickerName = "";
       }
+    },
+    updateTicker(tickerName, tickerData) {
+      this.tickers.find(t => t.name === tickerName).price =
+        tickerData[CURRENCY];
+      if (this.activeTicker && this.activeTicker.name === tickerName)
+        this.graph.push(tickerData[CURRENCY]);
     },
     removeTicker(ticker) {
       clearInterval(ticker.intervalId);
@@ -279,9 +296,10 @@ export default {
 
       const minValue = Math.min(...this.graph);
 
-      return this.graph.map(
-        price => 5 + ((price - minValue) * 95) / (maxValue - minValue) || 1
-      );
+      return this.graph.map(price => {
+        if (maxValue - minValue === 0) return 50;
+        return 5 + ((price - minValue) * 95) / (maxValue - minValue);
+      });
     }
   }
 };
