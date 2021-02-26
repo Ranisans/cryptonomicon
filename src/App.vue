@@ -247,6 +247,18 @@ export default {
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
     }
+
+    const windowData = Object.fromEntries(
+      new URL(window.location).searchParams.entries()
+    );
+
+    if (windowData.filter) {
+      this.filter = windowData.filter;
+    }
+
+    if (windowData.page) {
+      this.page = windowData.page;
+    }
   },
   beforeUnmount() {
     if (this.intervalId) clearInterval(this.intervalId);
@@ -292,12 +304,40 @@ export default {
     },
     hasNextPage() {
       return this.filteredTickers.length > this.endIndex;
+    },
+    pageStateOptions() {
+      return {
+        filter: this.filter,
+        page: this.page
+      };
+    }
+  },
+  watch: {
+    filter() {
+      this.page = 1;
+    },
+    pageStateOptions(value) {
+      window.history.pushState(
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
+      );
+    },
+    showedTickers() {
+      if (this.showedTickers.length === 0 && this.page > 1) {
+        this.page -= 1;
+      }
+    },
+    activeTicker() {
+      this.graph = [];
+    },
+    tickers() {
+      localStorage.setItem(LOCAL_STORAGE, JSON.stringify(this.tickers));
     }
   },
   methods: {
     clearActive() {
       this.activeTicker = null;
-      this.graph = [];
     },
     setActiveTicker(ticker) {
       this.activeTicker = ticker;
@@ -320,8 +360,7 @@ export default {
           price: "-"
         };
 
-        this.tickers.push(currentTickers);
-        localStorage.setItem(LOCAL_STORAGE, JSON.stringify(this.tickers));
+        this.tickers = [...this.tickers, currentTickers];
         this.tickerName = "";
       }
     },
@@ -337,7 +376,6 @@ export default {
         this.clearActive();
       }
       this.tickers = this.tickers.filter(t => t !== ticker);
-      localStorage.setItem(LOCAL_STORAGE, JSON.stringify(this.tickers));
     },
     normalizeGraph() {
       const maxValue = Math.max(...this.graph);
