@@ -3,13 +3,13 @@ import AppTickerBlock from "./components/AppTickerBlock.vue";
 import AppSpinner from "./components/AppSpinner.vue";
 import AppNewTickerBlock from "./components/AppNewTickerBlock.vue";
 import AppTickerChart from "./components/AppTickerChart.vue";
+import {
+  CURRENCY,
+  getCoinList,
+  subscribeToTickerDataUpdate,
+  unsubscribeFromTickerDataUpdate
+} from "./api";
 
-const headers = {
-  Authorization: "Apikey " + process.env.VUE_APP_API_KEY
-};
-
-const CURRENCY = "USD";
-const REFRESH_PERIOD = 3000;
 const MAX_TICKER_PER_PAGE = 6;
 const LOCAL_STORAGE = "cryptonomicon_key";
 const MAX_PRICES_IN_GRAPH = 50;
@@ -38,36 +38,8 @@ export default {
       currency: CURRENCY
     };
   },
-  created() {
-    async function getCoinList() {
-      const result = await fetch(
-        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true",
-        { headers: headers }
-      );
-      const data = await result.json();
-      const coinsData = data.Data;
-      const values = Object.values(coinsData);
-
-      this.coins = values.map(coin => coin.Symbol);
-    }
-
-    this.intervalId = setInterval(async () => {
-      if (this.tickersString) {
-        const result = await fetch(
-          `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${this.tickersString}&tsyms=${CURRENCY}&api_key=${process.env.VUE_APP_API_KEY}`
-        );
-        const data = await result.json();
-
-        this.tickersArray.forEach(tickerName => {
-          const tickerData = data[tickerName];
-          if (tickerData) {
-            this.updateTicker(tickerName, tickerData);
-          }
-        });
-      }
-    }, REFRESH_PERIOD);
-
-    getCoinList.call(this);
+  async created() {
+    this.coins = await getCoinList();
 
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
@@ -84,6 +56,9 @@ export default {
     const tickersData = localStorage.getItem(LOCAL_STORAGE);
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
+      this.tickers.forEach(ticker => {
+        subscribeToTickerDataUpdate(ticker.name, this.updateTicker);
+      });
     }
   },
   beforeUnmount() {
@@ -98,14 +73,6 @@ export default {
         return filteredCoins.slice(0, 4);
       }
       return [];
-    },
-
-    tickersArray() {
-      return this.tickers.map(ticker => ticker.name);
-    },
-
-    tickersString() {
-      return this.tickersArray.join(",");
     },
 
     startIndex() {
@@ -203,19 +170,25 @@ export default {
           price: "-"
         };
 
+        subscribeToTickerDataUpdate(newTickerName, this.updateTicker);
+
         this.tickers = [...this.tickers, currentTickers];
         this.tickerName = "";
       }
     },
 
-    updateTicker(tickerName, tickerData) {
-      this.tickers.find(t => t.name === tickerName).price =
-        tickerData[CURRENCY];
+    updateTicker(tickerName, tickerValue) {
+      const tickerPrice = this.formatPrice(tickerValue);
+      this.tickers.find(t => t.name === tickerName).price = tickerPrice;
       if (this.activeTicker && this.activeTicker.name === tickerName)
-        this.graph.push(tickerData[CURRENCY]);
+        this.graph.push(tickerPrice);
       if (this.graph.length > MAX_PRICES_IN_GRAPH) {
         this.graph = this.graph.slice(-MAX_PRICES_IN_GRAPH);
       }
+    },
+
+    formatPrice(price) {
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
     removeTicker(ticker) {
@@ -224,6 +197,7 @@ export default {
         this.clearActive();
       }
       this.tickers = this.tickers.filter(t => t !== ticker);
+      unsubscribeFromTickerDataUpdate(ticker.name);
     }
   }
 };
