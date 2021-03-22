@@ -167,7 +167,8 @@ export default {
         this.coinsExample = [];
         const currentTickers = {
           name: newTickerName,
-          price: "-"
+          price: "-",
+          error: false
         };
 
         subscribeToTickerDataUpdate(newTickerName, this.updateTicker);
@@ -177,13 +178,19 @@ export default {
       }
     },
 
-    updateTicker(tickerName, tickerValue) {
-      const tickerPrice = this.formatPrice(tickerValue);
-      this.tickers.find(t => t.name === tickerName).price = tickerPrice;
-      if (this.activeTicker && this.activeTicker.name === tickerName)
-        this.graph.push(tickerPrice);
-      if (this.graph.length > MAX_PRICES_IN_GRAPH) {
-        this.graph = this.graph.slice(-MAX_PRICES_IN_GRAPH);
+    updateTicker(tickerName, { price, error = false }) {
+      const thisTicker = this.tickers.find(t => t.name === tickerName);
+      if (!error) {
+        const tickerPrice = this.formatPrice(price);
+        thisTicker.price = tickerPrice;
+        thisTicker.error = false;
+        if (this.activeTicker && this.activeTicker.name === tickerName)
+          this.graph.push(tickerPrice);
+        if (this.graph.length > MAX_PRICES_IN_GRAPH) {
+          this.graph = this.graph.slice(-MAX_PRICES_IN_GRAPH);
+        }
+      } else {
+        thisTicker.error = true;
       }
     },
 

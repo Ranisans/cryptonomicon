@@ -1,6 +1,7 @@
 const tickerHandler = new Map();
 export const CURRENCY = "USD";
-const AGGREGATE_INDEX = "5";
+const CURRENCY_MESSAGE = "5";
+const ERROR_SUBSCRIPTION = "500";
 
 export const getCoinList = async () => {
   const headers = {
@@ -18,28 +19,39 @@ export const getCoinList = async () => {
   return resultData;
 };
 
-const getCurrentPrice = async ticker => {
-  const result = await fetch(
-    `https://min-api.cryptocompare.com/data/price?fsym=${ticker}&tsyms=${CURRENCY}&api_key=${process.env.VUE_APP_API_KEY}`
-  );
-  const tickersData = await result.json();
-
-  return tickersData[CURRENCY];
-};
-
 const ws = new WebSocket(
   `wss://streamer.cryptocompare.com/v2?api_key=${process.env.VUE_APP_API_KEY}`
 );
 
 ws.onmessage = event => {
-  const { TYPE: type, PRICE: price, FROMSYMBOL: currentTicker } = JSON.parse(
-    event.data
-  );
-  if (type !== AGGREGATE_INDEX || price === undefined) return;
+  const messageData = JSON.parse(event.data);
+  const {
+    TYPE: type,
+    PRICE: price,
+    FROMSYMBOL: currentTicker,
+    PARAMETER: parameter
+  } = messageData;
+  if (
+    (type === CURRENCY_MESSAGE && price !== undefined) ||
+    type === ERROR_SUBSCRIPTION
+  ) {
+    // sometimes cryptocompare return price=undefined
 
-  // sometimes cryptocompare return price=undefined
-  const callback = tickerHandler.get(currentTicker);
-  if (callback) callback(currentTicker, price);
+    if (type === ERROR_SUBSCRIPTION) {
+      // "5~CCCAGG~1231314~USD" - example
+      const tickerName = parameter.split("~")[2];
+      const callback = tickerHandler.get(tickerName);
+      if (callback) {
+        callback(tickerName, { error: true });
+      }
+      return;
+    }
+
+    const callback = tickerHandler.get(currentTicker);
+    if (callback) {
+      callback(currentTicker, { price });
+    }
+  }
 };
 
 const sendMessageToWS = message => {
@@ -49,7 +61,7 @@ const sendMessageToWS = message => {
 const subscribeToTickerDataOnServer = ticker => {
   sendMessageToWS({
     action: "SubAdd",
-    subs: [`5~CCCAGG~${ticker}~USD`]
+    subs: [`5~CCCAGG~${ticker}~${CURRENCY}`]
   });
 };
 
@@ -60,15 +72,11 @@ const unsubscribeFromTickerDataOnServer = ticker => {
   });
 };
 
-export const subscribeToTickerDataUpdate = async (ticker, callback) => {
+export const subscribeToTickerDataUpdate = (ticker, callback) => {
   const subscribers = tickerHandler.get(ticker);
   if (!subscribers) {
     subscribeToTickerDataOnServer(ticker);
     tickerHandler.set(ticker, callback);
-
-    // get current price (for slow updated tickers)
-    const currentTickerPrice = await getCurrentPrice(ticker);
-    callback(ticker, currentTickerPrice);
   }
 };
 
