@@ -1,7 +1,16 @@
+/**
+ * tickerHandlerRecord = {
+ *   callbacks: [],
+ *   currency: USD || BTC
+ * }
+ */
 const tickerHandler = new Map();
 export const CURRENCY = "USD";
+const ALTERNATIVE_CURRENCY = "BTC";
 const CURRENCY_MESSAGE = "5";
 const ERROR_SUBSCRIPTION = "500";
+
+let btcUsd = 0;
 
 export const getCoinList = async () => {
   const headers = {
@@ -24,63 +33,109 @@ const ws = new WebSocket(
 );
 
 ws.onmessage = event => {
-  const messageData = JSON.parse(event.data);
   const {
     TYPE: type,
     PRICE: price,
     FROMSYMBOL: currentTicker,
+    TOSYMBOL: currency,
     PARAMETER: parameter
-  } = messageData;
-  if (
-    (type === CURRENCY_MESSAGE && price !== undefined) ||
-    type === ERROR_SUBSCRIPTION
-  ) {
-    // sometimes cryptocompare return price=undefined
+  } = JSON.parse(event.data);
 
-    if (type === ERROR_SUBSCRIPTION) {
-      // "5~CCCAGG~1231314~USD" - example
-      const tickerName = parameter.split("~")[2];
-      const callback = tickerHandler.get(tickerName);
-      if (callback) {
-        callback(tickerName, { error: true });
-      }
-      return;
-    }
+  if (type == CURRENCY_MESSAGE && price !== undefined) {
+    updateTickerData(currentTicker, price, currency);
+  } else if (type === ERROR_SUBSCRIPTION) {
+    errorSubscriptionProcessing(parameter);
+  }
+};
 
-    const callback = tickerHandler.get(currentTicker);
-    if (callback) {
-      callback(currentTicker, { price });
+const setBtcUsdCourse = (_, { price }) => {
+  btcUsd = price;
+};
+
+const convertPrice = value => {
+  return value * btcUsd;
+};
+
+const updateTickerData = (currentTicker, price, currency) => {
+  const { callbacks } = tickerHandler.get(currentTicker);
+  if (callbacks) {
+    let tickerPrice = price;
+    if (currency === ALTERNATIVE_CURRENCY) {
+      tickerPrice = convertPrice(price);
     }
+    for (const callback of callbacks)
+      callback(currentTicker, { price: tickerPrice });
+  }
+};
+
+const errorSubscriptionProcessing = parameter => {
+  const [, , tickerName, currency] = parameter.split("~");
+
+  if (currency === CURRENCY) {
+    // add subscription in WS with currency = BTC
+    subscribeOnWS(tickerName, ALTERNATIVE_CURRENCY);
+  } else {
+    const { callbacks } = tickerHandler.get(tickerName);
+    // send error for all callback
+    tickerHandler.delete(tickerName);
+    for (const callback of callbacks) callback(tickerName, { error: true });
+    // remove subscription in WS
   }
 };
 
 const sendMessageToWS = message => {
-  ws.send(JSON.stringify(message));
+  if (ws.readyState === 1) {
+    ws.send(JSON.stringify(message));
+  } else {
+    // optional: implement backoff for interval here
+    setTimeout(function() {
+      sendMessageToWS(message);
+    }, 500);
+  }
 };
 
-const subscribeToTickerDataOnServer = ticker => {
+const subscribeOnWS = (ticker, currency) => {
   sendMessageToWS({
     action: "SubAdd",
-    subs: [`5~CCCAGG~${ticker}~${CURRENCY}`]
+    subs: [`5~CCCAGG~${ticker}~${currency}`]
   });
 };
 
-const unsubscribeFromTickerDataOnServer = ticker => {
+const unsubscribeFromWS = (ticker, currency) => {
   sendMessageToWS({
     action: "SubRemove",
-    subs: [`5~CCCAGG~${ticker}~${CURRENCY}`]
+    subs: [`5~CCCAGG~${ticker}~${currency}`]
   });
 };
 
 export const subscribeToTickerDataUpdate = (ticker, callback) => {
-  const subscribers = tickerHandler.get(ticker);
-  if (!subscribers) {
-    subscribeToTickerDataOnServer(ticker);
-    tickerHandler.set(ticker, callback);
+  const tickerData = tickerHandler.get(ticker);
+  if (!tickerData) {
+    tickerHandler.set(ticker, {
+      callbacks: [callback],
+      currency: CURRENCY
+    });
+    // add subscription in WS
+    subscribeOnWS(ticker, CURRENCY);
+  } else {
+    tickerData.callbacks.push(callback);
   }
 };
 
-export const unsubscribeFromTickerDataUpdate = ticker => {
-  tickerHandler.delete(ticker);
-  unsubscribeFromTickerDataOnServer(ticker);
+export const unsubscribeFromTickerDataUpdate = (ticker, callback) => {
+  const tickerData = tickerHandler.get(ticker);
+  if (tickerData) {
+    const newCallbacks = tickerData.callbacks.filter(t => t !== callback);
+    if (newCallbacks.length === 0) {
+      // remove subscription in WS
+      unsubscribeFromWS(ticker, tickerData.currency);
+      tickerHandler.delete(ticker);
+    } else {
+      tickerData.set(ticker, newCallbacks);
+    }
+  }
+};
+
+ws.onopen = function() {
+  subscribeToTickerDataUpdate(ALTERNATIVE_CURRENCY, setBtcUsdCourse);
 };

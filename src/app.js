@@ -204,7 +204,7 @@ export default {
         this.clearActive();
       }
       this.tickers = this.tickers.filter(t => t !== ticker);
-      unsubscribeFromTickerDataUpdate(ticker.name);
+      unsubscribeFromTickerDataUpdate(ticker.name, this.updateTicker);
     }
   }
 };
