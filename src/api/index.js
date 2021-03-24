@@ -1,3 +1,5 @@
+import { CURRENCY } from "../constants";
+
 /**
  * tickerHandlerRecord = {
  *   callbacks: [],
@@ -5,45 +7,31 @@
  * }
  */
 const tickerHandler = new Map();
-export const CURRENCY = "USD";
 const ALTERNATIVE_CURRENCY = "BTC";
 const CURRENCY_MESSAGE = "5";
 const ERROR_SUBSCRIPTION = "500";
+const ERROR_SUBSCRIPTION_MESSAGE = "INVALID_SUB";
 
 let btcUsd = 0;
 
-export const getCoinList = async () => {
-  const headers = {
-    Authorization: "Apikey " + process.env.VUE_APP_API_KEY
-  };
-  const result = await fetch(
-    "https://min-api.cryptocompare.com/data/all/coinlist?summary=true",
-    { headers: headers }
-  );
-  const data = await result.json();
-  const coinsData = data.Data;
-  const values = Object.values(coinsData);
+const myWorker = new SharedWorker("./worker", { type: "module" });
 
-  const resultData = values.map(coin => coin.Symbol);
-  return resultData;
-};
-
-const ws = new WebSocket(
-  `wss://streamer.cryptocompare.com/v2?api_key=${process.env.VUE_APP_API_KEY}`
-);
-
-ws.onmessage = event => {
+myWorker.port.onmessage = event => {
   const {
     TYPE: type,
     PRICE: price,
     FROMSYMBOL: currentTicker,
     TOSYMBOL: currency,
-    PARAMETER: parameter
+    PARAMETER: parameter,
+    MESSAGE: message
   } = JSON.parse(event.data);
 
   if (type == CURRENCY_MESSAGE && price !== undefined) {
     updateTickerData(currentTicker, price, currency);
-  } else if (type === ERROR_SUBSCRIPTION) {
+  } else if (
+    type === ERROR_SUBSCRIPTION &&
+    message === ERROR_SUBSCRIPTION_MESSAGE
+  ) {
     errorSubscriptionProcessing(parameter);
   }
 };
@@ -79,19 +67,11 @@ const errorSubscriptionProcessing = parameter => {
     // send error for all callback
     tickerHandler.delete(tickerName);
     for (const callback of callbacks) callback(tickerName, { error: true });
-    // remove subscription in WS
   }
 };
 
 const sendMessageToWS = message => {
-  if (ws.readyState === 1) {
-    ws.send(JSON.stringify(message));
-  } else {
-    // optional: implement backoff for interval here
-    setTimeout(function() {
-      sendMessageToWS(message);
-    }, 500);
-  }
+  myWorker.port.postMessage({ message: JSON.stringify(message) });
 };
 
 const subscribeOnWS = (ticker, currency) => {
@@ -131,11 +111,25 @@ export const unsubscribeFromTickerDataUpdate = (ticker, callback) => {
       unsubscribeFromWS(ticker, tickerData.currency);
       tickerHandler.delete(ticker);
     } else {
-      tickerData.set(ticker, newCallbacks);
+      tickerHandler.set(ticker, newCallbacks);
     }
   }
 };
 
-ws.onopen = function() {
-  subscribeToTickerDataUpdate(ALTERNATIVE_CURRENCY, setBtcUsdCourse);
+subscribeToTickerDataUpdate(ALTERNATIVE_CURRENCY, setBtcUsdCourse);
+
+export const getCoinList = async () => {
+  const headers = {
+    Authorization: "Apikey " + process.env.VUE_APP_API_KEY
+  };
+  const result = await fetch(
+    "https://min-api.cryptocompare.com/data/all/coinlist?summary=true",
+    { headers: headers }
+  );
+  const data = await result.json();
+  const coinsData = data.Data;
+  const values = Object.values(coinsData);
+
+  const resultData = values.map(coin => coin.Symbol);
+  return resultData;
 };

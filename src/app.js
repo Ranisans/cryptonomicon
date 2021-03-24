@@ -4,11 +4,11 @@ import AppSpinner from "./components/AppSpinner.vue";
 import AppNewTickerBlock from "./components/AppNewTickerBlock.vue";
 import AppTickerChart from "./components/AppTickerChart.vue";
 import {
-  CURRENCY,
   getCoinList,
   subscribeToTickerDataUpdate,
   unsubscribeFromTickerDataUpdate
 } from "./api";
+import { CURRENCY } from "./constants";
 
 const MAX_TICKER_PER_PAGE = 6;
 const LOCAL_STORAGE = "cryptonomicon_key";
