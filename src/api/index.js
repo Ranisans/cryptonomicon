@@ -70,8 +70,8 @@ const errorSubscriptionProcessing = parameter => {
   } else {
     const { callbacks } = tickerHandler.get(tickerName);
     // send error for all callback
-    tickerHandler.delete(tickerName);
     for (const callback of callbacks) callback(tickerName, { error: true });
+    tickerHandler.delete(tickerName);
   }
 };
 

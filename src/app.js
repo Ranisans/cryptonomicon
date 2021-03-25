@@ -8,10 +8,9 @@ import {
   subscribeToTickerDataUpdate,
   unsubscribeFromTickerDataUpdate
 } from "./api";
-import { CURRENCY } from "./constants";
+import { CURRENCY, LOCAL_STORAGE_KEY } from "./constants";
 
 const MAX_TICKER_PER_PAGE = 6;
-const LOCAL_STORAGE = "cryptonomicon_key";
 const MAX_PRICES_IN_GRAPH = 50;
 
 export default {
@@ -53,7 +52,7 @@ export default {
       this.page = windowData.page;
     }
 
-    const tickersData = localStorage.getItem(LOCAL_STORAGE);
+    const tickersData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach(ticker => {
@@ -139,7 +138,7 @@ export default {
     },
 
     tickers() {
-      localStorage.setItem(LOCAL_STORAGE, JSON.stringify(this.tickers));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.tickers));
     }
   },
   methods: {
