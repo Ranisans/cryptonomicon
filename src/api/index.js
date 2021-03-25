@@ -1,4 +1,5 @@
 import { CURRENCY } from "../constants";
+import { REMOVE_WRONG_SUBSCRIPTION, SUBSCRIBE, UNSUBSCRIBE } from "./constants";
 
 /**
  * tickerHandlerRecord = {
@@ -45,20 +46,24 @@ const convertPrice = value => {
 };
 
 const updateTickerData = (currentTicker, price, currency) => {
-  const { callbacks } = tickerHandler.get(currentTicker);
-  if (callbacks) {
-    let tickerPrice = price;
-    if (currency === ALTERNATIVE_CURRENCY) {
-      tickerPrice = convertPrice(price);
+  const tickerData = tickerHandler.get(currentTicker);
+  if (tickerData) {
+    const { callbacks } = tickerData;
+    if (callbacks) {
+      let tickerPrice = price;
+      if (currency === ALTERNATIVE_CURRENCY) {
+        tickerPrice = convertPrice(price);
+      }
+      for (const callback of callbacks)
+        callback(currentTicker, { price: tickerPrice });
     }
-    for (const callback of callbacks)
-      callback(currentTicker, { price: tickerPrice });
   }
 };
 
 const errorSubscriptionProcessing = parameter => {
   const [, , tickerName, currency] = parameter.split("~");
 
+  removeWrongSubscription(tickerName, currency);
   if (currency === CURRENCY) {
     // add subscription in WS with currency = BTC
     subscribeOnWS(tickerName, ALTERNATIVE_CURRENCY);
@@ -71,20 +76,21 @@ const errorSubscriptionProcessing = parameter => {
 };
 
 const sendMessageToWS = message => {
-  myWorker.port.postMessage({ message: JSON.stringify(message) });
+  myWorker.port.postMessage(message);
 };
 
 const subscribeOnWS = (ticker, currency) => {
-  sendMessageToWS({
-    action: "SubAdd",
-    subs: [`5~CCCAGG~${ticker}~${currency}`]
-  });
+  sendMessageToWS({ type: SUBSCRIBE, props: { ticker, currency } });
 };
 
 const unsubscribeFromWS = (ticker, currency) => {
+  sendMessageToWS({ type: UNSUBSCRIBE, props: { ticker, currency } });
+};
+
+const removeWrongSubscription = (ticker, currency) => {
   sendMessageToWS({
-    action: "SubRemove",
-    subs: [`5~CCCAGG~${ticker}~${currency}`]
+    type: REMOVE_WRONG_SUBSCRIPTION,
+    props: { ticker, currency }
   });
 };
 
