@@ -41,6 +41,7 @@
         :graphData="normalizedGraph"
         :currency="currency"
         @clear="clearActive"
+        ref="graphChart"
       />
     </div>
   </div>

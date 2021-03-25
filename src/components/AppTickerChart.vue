@@ -3,12 +3,15 @@
     <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
       {{ activeTicker.name }} - {{ currency }}
     </h3>
-    <div class="flex items-end border-gray-600 border-b border-l h-64">
+    <div
+      class="flex items-end border-gray-600 border-b border-l h-64"
+      ref="graph"
+    >
       <div
         v-for="(bar, id) in graphData"
         :key="id"
-        :style="{ height: `${bar}%` }"
-        class="bg-purple-800 border w-10"
+        :style="{ height: `${bar}%`, width: `${chartWidth}px` }"
+        class="bg-purple-800 border"
       ></div>
     </div>
     <button type="button" class="absolute top-0 right-0" @click="clearActive">
@@ -38,6 +41,8 @@
 </template>
 
 <script>
+import { CHART_WIDTH } from "../constants";
+
 export default {
   name: "AppTickerChart",
   props: {
@@ -48,6 +53,13 @@ export default {
       required: true
     }
   },
+
+  data() {
+    return {
+      chartWidth: CHART_WIDTH
+    };
+  },
+
   methods: {
     clearActive() {
       this.$emit("clear");

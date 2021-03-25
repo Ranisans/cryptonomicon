@@ -8,7 +8,7 @@ import {
   subscribeToTickerDataUpdate,
   unsubscribeFromTickerDataUpdate
 } from "./api";
-import { CURRENCY, LOCAL_STORAGE_KEY } from "./constants";
+import { CURRENCY, LOCAL_STORAGE_KEY, CHART_WIDTH } from "./constants";
 
 const MAX_TICKER_PER_PAGE = 6;
 const MAX_PRICES_IN_GRAPH = 50;
@@ -34,7 +34,8 @@ export default {
       coinsExample: [],
       page: 1,
       filter: "",
-      currency: CURRENCY
+      currency: CURRENCY,
+      maxGraphElements: MAX_PRICES_IN_GRAPH
     };
   },
   async created() {
@@ -60,9 +61,16 @@ export default {
       });
     }
   },
+
+  mounted() {
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+
   beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
     if (this.intervalId) clearInterval(this.intervalId);
   },
+
   computed: {
     coinsHints() {
       if (this.tickerName) {
@@ -139,6 +147,10 @@ export default {
 
     tickers() {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.tickers));
+    },
+
+    maxGraphElements() {
+      this.graph = this.graph.slice(-this.maxGraphElements);
     }
   },
   methods: {
@@ -185,8 +197,8 @@ export default {
         thisTicker.error = false;
         if (this.activeTicker && this.activeTicker.name === tickerName)
           this.graph.push(tickerPrice);
-        if (this.graph.length > MAX_PRICES_IN_GRAPH) {
-          this.graph = this.graph.slice(-MAX_PRICES_IN_GRAPH);
+        if (this.graph.length > this.maxGraphElements) {
+          this.graph = this.graph.slice(-this.maxGraphElements);
         }
       } else {
         thisTicker.error = true;
@@ -204,6 +216,12 @@ export default {
       }
       this.tickers = this.tickers.filter(t => t !== ticker);
       unsubscribeFromTickerDataUpdate(ticker.name, this.updateTicker);
+    },
+
+    calculateMaxGraphElements() {
+      if (this.$refs.graphChart)
+        this.maxGraphElements =
+          this.$refs.graphChart.$refs.graph.clientWidth / CHART_WIDTH;
     }
   }
 };
