@@ -11,7 +11,7 @@ import {
 import { CURRENCY, LOCAL_STORAGE_KEY, CHART_WIDTH } from "./constants";
 
 const MAX_TICKER_PER_PAGE = 6;
-const MAX_PRICES_IN_GRAPH = 50;
+const MAX_PRICES_IN_GRAPH = 1;
 
 export default {
   name: "App",
@@ -143,6 +143,8 @@ export default {
 
     activeTicker() {
       this.graph = [];
+
+      this.$nextTick().then(this.calculateMaxGraphElements());
     },
 
     tickers() {
@@ -160,7 +162,6 @@ export default {
 
     setActiveTicker(ticker) {
       this.activeTicker = ticker;
-      this.graph = [];
     },
 
     updateTickerValue(value) {
@@ -219,7 +220,7 @@ export default {
     },
 
     calculateMaxGraphElements() {
-      if (this.$refs.graphChart)
+      if (this.$refs.graphChart.$refs.graph)
         this.maxGraphElements =
           this.$refs.graphChart.$refs.graph.clientWidth / CHART_WIDTH;
     }
