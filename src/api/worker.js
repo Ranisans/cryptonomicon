@@ -1,11 +1,21 @@
 /* eslint-disable */
-import { SUBSCRIBE, UNSUBSCRIBE } from "./constants";
+import { CURRENCY } from "../constants";
+import { ALTERNATIVE_CURRENCY, SUBSCRIBE } from "./constants";
+import { removeTicker, setTickerData } from "./storeLogic";
+import { getTickerDataFromResponse } from "./tickerLogic";
 
 const ws = new WebSocket(
   `wss://streamer.cryptocompare.com/v2?api_key=${process.env.VUE_APP_API_KEY}`
 );
 
 const ports = [];
+/**
+ * tickersSubscriptions -
+ * ticker: {
+ *    currency: CURRENCY|ALTERNATIVE_CURRENCY
+ *    count: number
+ * }
+ */
 const tickersSubscriptions = {};
 
 onconnect = function(event) {
@@ -13,45 +23,73 @@ onconnect = function(event) {
   ports.push(newPort);
 
   ws.onmessage = function(event) {
+    const { data } = event;
+    const result = getTickerDataFromResponse(data);
+    const { ticker, price, currencyError, subscriptionError } = result;
+
+    let message = { ticker };
+
+    if (currencyError) {
+      // if currencyError
+      // change currency
+      tickersSubscriptions[ticker].currency = ALTERNATIVE_CURRENCY;
+      // subscribe to the alternative exchange rate currency
+      sendSubscriptionMessage(ticker, ALTERNATIVE_CURRENCY);
+      return;
+    } else if (subscriptionError) {
+      // else if subscriptionError - post error, remove from store, tickersSubscriptions
+      message.error = true;
+      unsubscribeFromTicker(ticker, true);
+    } else {
+      // else - post currency data and update store
+      message.price = price;
+
+      // update store
+      setTickerData({ name: ticker, price });
+    }
+
     for (const port of ports) {
-      port.postMessage(event.data);
+      port.postMessage(message);
     }
   };
 
-  const subscribeOnWS = ({ ticker, currency }, key) => {
-    if (tickersSubscriptions[key]) {
-      tickersSubscriptions[key] += 1;
+  const subscribeOnWS = ticker => {
+    if (tickersSubscriptions[ticker]) {
+      tickersSubscriptions[ticker].count += 1;
     } else {
-      tickersSubscriptions[key] = 1;
+      tickersSubscriptions[ticker] = {
+        currency: CURRENCY,
+        count: 1
+      };
 
-      sendMessageToWS(
-        JSON.stringify({
-          action: "SubAdd",
-          subs: [`5~CCCAGG~${ticker}~${currency}`]
-        })
-      );
+      sendSubscriptionMessage(ticker, CURRENCY);
     }
   };
 
-  const unsubscribeFromWS = ({ ticker, currency }, key) => {
-    if (tickersSubscriptions[key] > 1) {
-      tickersSubscriptions[key] -= 1;
-    } else {
-      delete tickersSubscriptions[key];
-      sendMessageToWS(
-        JSON.stringify({
-          action: "SubRemove",
-          subs: [`5~CCCAGG~${ticker}~${currency}`]
-        })
-      );
-    }
+  const sendSubscriptionMessage = (ticker, currency) => {
+    sendMessageToWS(
+      JSON.stringify({
+        action: "SubAdd",
+        subs: [`5~CCCAGG~${ticker}~${currency}`]
+      })
+    );
   };
 
-  const removeTickersSubscription = function(key) {
-    if (tickersSubscriptions[key] > 1) {
-      tickersSubscriptions[key] -= 1;
+  const unsubscribeFromTicker = (ticker, isErrorSubscription = false) => {
+    if (tickersSubscriptions[ticker].count > 1) {
+      tickersSubscriptions[ticker].count -= 1;
     } else {
-      delete tickersSubscriptions[key];
+      const { currency } = tickersSubscriptions[ticker];
+      delete tickersSubscriptions[ticker];
+      removeTicker(ticker);
+
+      if (!isErrorSubscription)
+        sendMessageToWS(
+          JSON.stringify({
+            action: "SubRemove",
+            subs: [`5~CCCAGG~${ticker}~${currency}`]
+          })
+        );
     }
   };
 
@@ -67,16 +105,12 @@ onconnect = function(event) {
   };
 
   newPort.onmessage = function(e) {
-    const { type, props } = e.data;
-
-    const key = `${props.ticker}-${props.currency}`;
+    const { type, ticker } = e.data;
 
     if (type === SUBSCRIBE) {
-      subscribeOnWS(props, key);
-    } else if (type === UNSUBSCRIBE) {
-      unsubscribeFromWS(props, key);
+      subscribeOnWS(ticker);
     } else {
-      removeTickersSubscription(key);
+      unsubscribeFromTicker(ticker);
     }
   };
 };
