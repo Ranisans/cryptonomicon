@@ -49,4 +49,5 @@ export const getTickerDataFromResponse = data => {
 
     return errorResult;
   }
+  return null;
 };

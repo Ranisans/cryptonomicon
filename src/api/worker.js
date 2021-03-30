@@ -25,6 +25,7 @@ onconnect = function(event) {
   ws.onmessage = function(event) {
     const { data } = event;
     const result = getTickerDataFromResponse(data);
+    if (!result) return
     const { ticker, price, currencyError, subscriptionError } = result;
 
     let message = { ticker };

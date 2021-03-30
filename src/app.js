@@ -8,7 +8,8 @@ import {
   subscribeToTickerDataUpdate,
   unsubscribeFromTickerDataUpdate
 } from "./api";
-import { CURRENCY, LOCAL_STORAGE_KEY, CHART_WIDTH } from "./constants";
+import { CURRENCY, CHART_WIDTH } from "./constants";
+import { getStoredTickers } from "./api/index";
 
 const MAX_TICKER_PER_PAGE = 6;
 const MAX_PRICES_IN_GRAPH = 1;
@@ -53,9 +54,9 @@ export default {
       this.page = windowData.page;
     }
 
-    const tickersData = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (tickersData) {
-      this.tickers = JSON.parse(tickersData);
+    const tickers = await getStoredTickers();
+    if (tickers) {
+      this.tickers = tickers;
       this.tickers.forEach(ticker => {
         subscribeToTickerDataUpdate(ticker.name, this.updateTicker);
       });
@@ -147,10 +148,6 @@ export default {
       this.$nextTick().then(this.calculateMaxGraphElements());
     },
 
-    tickers() {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.tickers));
-    },
-
     maxGraphElements() {
       this.graph = this.graph.slice(-this.maxGraphElements);
     }
@@ -193,7 +190,9 @@ export default {
     updateTicker(tickerName, { price, error = false }) {
       const thisTicker = this.tickers.find(t => t.name === tickerName);
       if (!error) {
-        const tickerPrice = this.formatPrice(price);
+        let tickerPrice = price;
+        if (typeof tickerPrice === "number")
+          tickerPrice = this.formatPrice(tickerPrice);
         thisTicker.price = tickerPrice;
         thisTicker.error = false;
         if (this.activeTicker && this.activeTicker.name === tickerName)
