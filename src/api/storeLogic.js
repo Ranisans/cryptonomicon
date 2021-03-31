@@ -2,7 +2,7 @@ const DB_NAME = "TickerDB";
 const STORE_NAME = "Tickers";
 const DB_VERSION = 1;
 
-let tickerStore = null;
+let db = null;
 
 /**
  * ticker data structure:
@@ -17,14 +17,7 @@ const initializeDB = async () => {
 
   // if DB is exist
   request.onsuccess = async event => {
-    const db = event.target.result;
-
-    const tickerTransaction = await db.transaction(STORE_NAME, "readwrite");
-    tickerStore = tickerTransaction.objectStore(STORE_NAME);
-    console.log(
-      "🚀 ~ file: storeLogic.js ~ line 24 ~ tickerStore",
-      tickerStore
-    );
+    db = event.target.result;
   };
 
   // if DB does not exist or the DB version is old
@@ -42,36 +35,67 @@ if (indexedDB) {
   initializeDB();
 }
 
+const getStore = (readonly = false) => {
+  const tickerTransaction = db.transaction(
+    STORE_NAME,
+    readonly ? "readonly" : "readwrite"
+  );
+  return tickerTransaction.objectStore(STORE_NAME);
+};
+
 export const getTickerData = async tickerName => {
-  if (!tickerStore) return null;
+  if (!db) return null;
   try {
+    const tickerStore = getStore(true);
     const ticker = await tickerStore.get(tickerName);
-    return ticker;
+    return new Promise((resolve, reject) => {
+      ticker.onsuccess = event => {
+        resolve(event.target.result);
+      };
+
+      ticker.onerror = () => {
+        reject([]);
+      };
+    });
   } catch (error) {
     return null;
   }
 };
 
-export const setTickerData = async ({ name, price }) => {
-  if (!tickerStore) return;
+export const setTickerData = ({ name, price }) => {
+  if (!db) return;
   try {
-    await tickerStore.put({ name, price });
+    const tickerStore = getStore();
+    tickerStore.add({ name, price });
   } catch (error) {
     return;
   }
 };
 
 export const removeTicker = async name => {
+  const tickerTransaction = db.transaction(STORE_NAME, "readwrite");
+  const tickerStore = tickerTransaction.objectStore(STORE_NAME);
   await tickerStore.delete(name);
 };
 
 // get all tickers for new session (from previous session or tab)
-export const getSavedTicker = async () => {
-  if (!tickerStore) return null;
+export const getSavedTickers = async () => {
+  if (!db) return [];
   try {
+    const tickerTransaction = db.transaction(STORE_NAME, "readwrite");
+    const tickerStore = tickerTransaction.objectStore(STORE_NAME);
     const tickers = await tickerStore.getAll();
-    return tickers;
+
+    return new Promise((resolve, reject) => {
+      tickers.onsuccess = event => {
+        resolve(event.target.result);
+      };
+
+      tickers.onerror = () => {
+        reject([]);
+      };
+    });
   } catch (error) {
-    return null;
+    return [];
   }
 };

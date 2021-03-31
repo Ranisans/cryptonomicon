@@ -51,7 +51,7 @@ const unsubscribeFromWS = ticker => {
 
 export const subscribeToTickerDataUpdate = async (ticker, callback) => {
   const currentValue = await getTickerData(ticker);
-  let price = currentValue ? currentValue : "-";
+  let price = currentValue ? currentValue.price : "-";
 
   callback(ticker, { price });
 
